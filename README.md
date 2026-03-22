@@ -51,9 +51,10 @@ Este projeto foi desenvolvido com o objetivo de simular uma análise de seguran�
 
 ## 🚀 Como Executar
 
-### 1. Clonar o repositóri
+### 1. Clonar o repositório
 
 git clone https://github.com/SEU_USUARIO/aws-sg-scanner.git
+
 cd aws-sg-scanner
 
 ---
@@ -78,14 +79,16 @@ python3 scanner.py
 
 ### Exemplo de saída
 
+```text
 Security Group: ssh-vuln
 Quantidade de regras encontradas: 1
 Porta exposta: 22  
-
+```
 ---
 
 ### Permissões necessárias
 
+```json
 {
   "Effect": "Allow",
   "Action": [
@@ -93,7 +96,7 @@ Porta exposta: 22
   ],
   "Resource": "*"
 }
-
+```
 ---
 
 ### Cenário de Teste
