@@ -2,7 +2,10 @@ import boto3
 import csv
 import json
 from botocore.exceptions import BotoCoreError, ClientError 
+from tabulate import tabulate
+from colorama import Fore, Style, init
 
+init(autoreset=True)
 
 SENSITIVE_PORTS = {
     22: 'SSH',
@@ -26,7 +29,36 @@ SENSITIVE_PORTS = {
     143: 'IMAP',
 }
 
-#ec2 = boto3.client("ec2", region_name="sa-east-1")
+def print_findings_table(findings):
+    if not findings:
+        print(Fore.GREEN + "\n Nenhuma exposição crítica encontrada.")
+        return
+    
+    table = []
+
+    for finding in findings:
+        table.append([
+            finding["security_group_name"],
+            finding["from_port"] if finding["from_port"] != -1 else "Todas as portas",
+            finding["cidr"],
+            color_risk(finding["risk"]),
+        ])
+
+    headers = ["Security Group", "Porta", "CIDR", "Risco"]
+
+    print(Fore.CYAN + "\n Resumo dos resultados:\n")
+    print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
+
+def color_risk(risk):
+    if risk == "Crítico":
+        return Fore.RED + risk + Style.RESET_ALL
+    elif risk == "Alto":
+        return Fore.YELLOW + risk + Style.RESET_ALL
+    elif risk == "Médio":
+        return Fore.CYAN + risk + Style.RESET_ALL
+    return Fore.GREEN + risk + Style.RESET_ALL
+
+
 
 def classify_risk(port,cidr):
     if cidr in ["0.0.0.0/0","::/0"]:
@@ -59,22 +91,19 @@ def analyze_security_groups():
     try:
         response = ec2.describe_security_groups()
         security_groups = response.get("SecurityGroups", [])
-        print("Total de Security Groups encontrados:", len(security_groups))
+        
 
     except (BotoCoreError, ClientError) as error:
         print(f"Erro ao consultar Security Groups: {error}")
 
     for sg in security_groups:
-        print("|----------------------------------- ----------------------------|")
-        print("Security Group:", sg.get("GroupName"))
-
+        
         group_id = sg.get("GroupId")
         group_name = sg.get("GroupName")
         vpc_id = sg.get("VpcId", "N/A")
 
         permissions = sg.get("IpPermissions", [])
-        print("Quantidade de regras de entrada:", len(permissions))
-
+        
         for permission in sg.get("IpPermissions",[]):
 
             from_port   = permission.get("FromPort", -1)
@@ -86,18 +115,17 @@ def analyze_security_groups():
 
             for ip_range in ipv4_ranges:
                 cidr = ip_range.get("CidrIp")
-                #print("IPv4 encontrado:", cidr)
                 process_finding(findings, group_id, group_name, vpc_id, protocol, from_port, to_port, cidr)
                         
             for ip_range in ipv6_ranges:
                 cidr = ip_range.get("CidrIpv6")
-                #print("IPv6 encontrado:", cidr)    
                 process_finding(findings, group_id, group_name, vpc_id, protocol, from_port, to_port, cidr)
             
     return findings
 
 
 def process_finding(findings, group_id, group_name, vpc_id, protocol, from_port, to_port, cidr):
+    
     if cidr not in ["0.0.0.0/0", "::/0"]:
         print("CIDR ignorado")
         return
@@ -122,8 +150,7 @@ def process_finding(findings, group_id, group_name, vpc_id, protocol, from_port,
         return
 
     for port in range(from_port, to_port + 1):
-        print("Porta exposta:", port)
-
+        
         if port in [22, 23, 3389, 5900, 3306, 5432, 1433, 1521, 27017, 6379, 9200, 8080, 8443, 21, 25, 110, 143]:
             risk = classify_risk(port, cidr)
             recommendation = get_recommendation(port, cidr)
@@ -140,6 +167,7 @@ def process_finding(findings, group_id, group_name, vpc_id, protocol, from_port,
                 "risk": risk,
                 "recommendation": recommendation
             })
+        
 
 
 def export_csv(findings, filename="output/findings.csv"):
@@ -169,10 +197,11 @@ def export_json(findings, filename="output/findings.json"):
 if __name__ == "__main__":
     results = analyze_security_groups()
 
-    if not results:
-        print("Nenhuma exposição crítica encontrada.")
-    else:
-        print(f"{len(results)} achados encontrados. Exportando resultados...")
+    print_findings_table(results)
+
+    if results:
+        print(Fore.CYAN + f"\n📁 {len(results)} achados encontrados. Exportando resultados...")
         export_csv(results)
         export_json(results)
-        print("Exportação concluída.")
+        print(Fore.GREEN + "✅ Resultados exportados para 'output/findings.csv' e 'output/findings.json'")
+        
